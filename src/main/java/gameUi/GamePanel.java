@@ -4,6 +4,7 @@ import gameCards.CardItem;
 import gameCards.PlantCardEnum;
 import gamePlants.GameItem;
 import gamePlants.PeaShooter;
+import gamePlants.SunFlower;
 import gamePlants.SunItem;
 
 import javax.imageio.ImageIO;
@@ -20,6 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 
 public class GamePanel extends JPanel {
+    Graphics2D graphics2D;
 
     BufferedImage mainBg;
     List<SunItem> listaDeSois = new ArrayList<SunItem>();
@@ -31,8 +33,12 @@ public class GamePanel extends JPanel {
     int qntSois = 0; // Quantidade de sóis coletados (o sol é a moeda do jogo para obter plantas.)
     CardItem selected_plant;
     boolean isPlantSelected = false;
+    PeaShooter floatingSelectedPeashooter = new PeaShooter(); // Quando o usuário selecionar um card, uma pré-visualização da planta seguindo o mouse.
+    SunFlower floatingSelectedSunFlower = new SunFlower();
 
     public GamePanel(int windowWidth, int windowHeight){
+
+
         setPreferredSize(new Dimension(1012, 785));
         setLayout(null); // Opcional, dependendo do layout que você pretende usar no painel
 
@@ -60,7 +66,7 @@ public class GamePanel extends JPanel {
                 while(solItemIterator.hasNext()){
                     SunItem sol = solItemIterator.next();
                     if(sol.ItemWasClicked(e.getPoint())){
-                        System.out.println("Clicou");
+                        //System.out.println("Clicou");
                         qntSois+=25;
                         solItemIterator.remove();
                     }
@@ -71,15 +77,9 @@ public class GamePanel extends JPanel {
                     if(plantItem.ItemWasClicked(e.getPoint())){
                         isPlantSelected = true;
                         selected_plant = plantItem;
+                        System.out.println("Selecionou planta.");
+                        break;              // sair do loop.
                     }
-                }
-            }
-
-            @Override
-            public void mouseMoved(MouseEvent e) {
-
-                if(isPlantSelected){
-
                 }
             }
 
@@ -96,6 +96,8 @@ public class GamePanel extends JPanel {
     }
 
     public void startGame(Graphics2D graphics){
+
+        this.graphics2D = graphics;
         try {
             // Carrega a imagem de fundo do arquivo localizado na pasta "resources"
             mainBg = ImageIO.read(new File(getClass().getResource("/images/mainBG.png").toURI()));
@@ -109,23 +111,39 @@ public class GamePanel extends JPanel {
         drawPlantsCardBoard(graphics);
         drawSuns(graphics);
         drawNumberOfCollectedSuns(graphics);
+
+        if(isPlantSelected){
+            drawSelectedCard(graphics);
+        }
+
     }
 
     // Desenha a planta seguindo o cursor do mouse caso o usuário selecionar uma planta.
-    private void drawSelectedCard(Graphics2D graphics, MouseEvent e) {
+    private void drawSelectedCard(Graphics2D graphics) {
 
-        mousePoint = e.getPoint();
-        SwingUtilities.convertPointToScreen(mousePoint, GamePanel.this); // Converte as coordenadas para a tela
+        Point mousePointInfo = MouseInfo.getPointerInfo().getLocation();
+        SwingUtilities.convertPointFromScreen(mousePointInfo, GamePanel.this); // Convertendo as coordenadas para o painel
 
-        selected_plant.setX(mousePoint.x);
-        selected_plant.setY(mousePoint.y);
-        selected_plant.drawItem(graphics);
+        switch (selected_plant.getCardType()){
+            case CARD_PEASHOOTER:
+                System.out.println("Desenhar Planta: " + selected_plant.getCardType().name());
 
+                floatingSelectedPeashooter.setX(mousePointInfo.x - (floatingSelectedPeashooter.getWidth() / 2));
+                floatingSelectedPeashooter.setY(mousePointInfo.y - (floatingSelectedPeashooter.getHeight() / 2));
+                floatingSelectedPeashooter.drawItemWithBrightnessIncreased(graphics);
+                break;
+            case CARD_SUNFLOWER:
+                System.out.println("Desenhar Planta: " + selected_plant.getCardType().name());
+                floatingSelectedSunFlower.setX(mousePointInfo.x - (floatingSelectedSunFlower.getWidth() / 2));
+                floatingSelectedSunFlower.setY(mousePointInfo.y - (floatingSelectedSunFlower.getHeight() / 2));
+                floatingSelectedSunFlower.drawItemWithBrightnessIncreased(graphics);
+                break;
+        }
     }
 
     private void drawNumberOfCollectedSuns(Graphics2D graphics) {
 
-        System.out.println("Desenhando string: " + qntSois);
+        //System.out.println("Desenhando string: " + qntSois);
 
         graphics.setColor(Color.BLACK);
         graphics.setStroke(new BasicStroke(2.5f));

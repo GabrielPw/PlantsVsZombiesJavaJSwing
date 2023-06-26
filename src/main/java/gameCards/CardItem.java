@@ -23,7 +23,7 @@ public class CardItem {
     BufferedImage itemImage;
 
     public CardItem(PlantCardEnum cardType){
-
+        this.cardType = cardType;
         loadItemImage(cardType.getImagePath());
     }
 
@@ -50,7 +50,7 @@ public class CardItem {
     public boolean ItemWasClicked(Point mousePoint){
 
         if (itemRect.contains(mousePoint.getX(), mousePoint.getY())){
-            System.out.println("clicou");
+            //System.out.println("clicou");
             return true;
         }
         return false;
