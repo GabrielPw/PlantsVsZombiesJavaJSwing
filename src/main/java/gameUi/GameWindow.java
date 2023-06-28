@@ -44,6 +44,7 @@ public class GameWindow extends JFrame {
                 cardLayout.show(mainJpanel, "game");
                 mainJpanel.repaint();
 
+                gamePanel.startSunGeneratorTimer();
                 //gamePanel.startGame();
             }
         });

@@ -6,6 +6,9 @@ import gamePlants.GameItem;
 import gamePlants.PeaShooter;
 import gamePlants.SunFlower;
 import gamePlants.SunItem;
+import gameZombies.Zombie;
+import gameZombies.ZombieAnimationThread;
+import map.GameMapGrid;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -22,9 +25,11 @@ import java.util.List;
 
 public class GamePanel extends JPanel {
     Graphics2D graphics2D;
+    GameMapGrid gameMapGrid = new GameMapGrid(40, 115, 102, 120, 5, 9);
 
     BufferedImage mainBg;
     List<SunItem> listaDeSois = new ArrayList<SunItem>();
+    Rectangle clickedRect; // armazena retangulo da grid que foi clicado para plantar uma planta selecionada.
     Iterator<SunItem> solItemIterator;
     Timer timer;
     Point mousePoint;
@@ -35,6 +40,7 @@ public class GamePanel extends JPanel {
     boolean isPlantSelected = false;
     PeaShooter floatingSelectedPeashooter = new PeaShooter(); // Quando o usuário selecionar um card, uma pré-visualização da planta seguindo o mouse.
     SunFlower floatingSelectedSunFlower = new SunFlower();
+    Zombie regularZombie = new Zombie();
 
     public GamePanel(int windowWidth, int windowHeight){
 
@@ -46,12 +52,11 @@ public class GamePanel extends JPanel {
         setVisible(true);
 
         // inicia o timer
-        timer = new Timer(5000, e -> gerarSois());
-        timer.start();
+        timer = new Timer(3000, e -> gerarSois()); // 8000 --> 8s.
 
         avaliablePlants = new ArrayList<>(List.of(
-                new CardItem(PlantCardEnum.CARD_SUNFLOWER),
-                new CardItem(PlantCardEnum.CARD_PEASHOOTER)
+                new CardItem(PlantCardEnum.CARD_SUNFLOWER, 50),
+                new CardItem(PlantCardEnum.CARD_PEASHOOTER, 100)
         ));
 
         addMouseListener(new MouseAdapter() {
@@ -69,21 +74,60 @@ public class GamePanel extends JPanel {
                         //System.out.println("Clicou");
                         qntSois+=25;
                         solItemIterator.remove();
+                        return;
                     }
                 }
 
                 // Verifica se usuário clicou para selecionar uma planta.
                 for (CardItem plantItem : avaliablePlants){
-                    if(plantItem.ItemWasClicked(e.getPoint())){
-                        isPlantSelected = true;
-                        selected_plant = plantItem;
-                        System.out.println("Selecionou planta.");
-                        break;              // sair do loop.
+                    // verificar se usuário tem sois o suficiente para selecionar planta.
+                    if (qntSois >= plantItem.getCardSunPrice()) {
+                        if (plantItem.ItemWasClicked(e.getPoint())) {
+                            // verifica se usuário clicou para selecionar uma planta sendo que ele já estava com outra selecionada.
+                            if (isPlantSelected){ // caso positivo, a operação de selecionar será cancelada.
+                                isPlantSelected = false;
+                            }else {
+                                isPlantSelected = true;
+                                selected_plant = plantItem;
+                                System.out.println("Selecionou planta.");
+                                break;              // sair do loop.
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                // Verifica se usuário está plantando uma planta selecionada.
+                if (isPlantSelected){
+                    // coordenadas do retangulo clicado dentro da matriz de retangulos.
+                    Point coordsOfClickedRectInMatrix = gameMapGrid.checkIfSomeRectangleWasClickedAndReturnCoordsInMatrix(e.getPoint(), graphics2D);
+                    if (coordsOfClickedRectInMatrix != null){
+                        GameItem itemToBePlanted = null;
+                        switch (selected_plant.getCardType()){
+                            case CARD_PEASHOOTER:
+                                itemToBePlanted = new PeaShooter();
+                                break;
+                            case CARD_SUNFLOWER:
+                                itemToBePlanted = new SunFlower();
+                                
+                        }
+                        if (itemToBePlanted != null) {
+                            gameMapGrid.plantItemAtGridSpace(coordsOfClickedRectInMatrix, itemToBePlanted);
+                            qntSois-=itemToBePlanted.getSunPrice();
+                            isPlantSelected = false;
+                        }
                     }
                 }
             }
-
         });
+
+
+        regularZombie.setX(gameMapGrid.getRectMatrixGrid()[2][8].x); // linha 2 do grid.
+        regularZombie.setY(gameMapGrid.getRectMatrixGrid()[2][2].y); // linha 2 do grid.
+        regularZombie.ajustEachBodyPartCoordinates();
+
+        ZombieAnimationThread zombieAnimationThread = new ZombieAnimationThread(regularZombie, this);
+        zombieAnimationThread.start();
     }
 
     @Override
@@ -109,13 +153,22 @@ public class GamePanel extends JPanel {
 
         graphics.drawImage(mainBg, 0, 0, getWidth(), getHeight(), this);
         drawPlantsCardBoard(graphics);
-        drawSuns(graphics);
         drawNumberOfCollectedSuns(graphics);
 
         if(isPlantSelected){
             drawSelectedCard(graphics);
         }
 
+        gameMapGrid.drawPlantedPlants(graphics);
+
+        regularZombie.drawZombie(graphics);
+        regularZombie.walk();
+        regularZombie.drawZombieRect(graphics);
+        if (gameMapGrid.getItemMatrixGrid()[2][0] != null) {
+            System.out.println("Tem planta no [2][0].");
+            regularZombie.checkZombieColissionWithSomePlant(gameMapGrid.getItemMatrixGrid()[2][0]);
+        }
+        drawSuns(graphics);
     }
 
     // Desenha a planta seguindo o cursor do mouse caso o usuário selecionar uma planta.
@@ -126,17 +179,21 @@ public class GamePanel extends JPanel {
 
         switch (selected_plant.getCardType()){
             case CARD_PEASHOOTER:
-                System.out.println("Desenhar Planta: " + selected_plant.getCardType().name());
+                //System.out.println("Desenhar Planta: " + selected_plant.getCardType().name());
 
                 floatingSelectedPeashooter.setX(mousePointInfo.x - (floatingSelectedPeashooter.getWidth() / 2));
                 floatingSelectedPeashooter.setY(mousePointInfo.y - (floatingSelectedPeashooter.getHeight() / 2));
+                gameMapGrid.checkIfMouseIsOverSomeRectangle(mousePointInfo, graphics);
                 floatingSelectedPeashooter.drawItemWithBrightnessIncreased(graphics);
+                //gameMapGrid.drawRectGrid(graphics, gameMapGrid.getNumberOfRows(), gameMapGrid.getNumberOfCols());
                 break;
             case CARD_SUNFLOWER:
-                System.out.println("Desenhar Planta: " + selected_plant.getCardType().name());
+                //System.out.println("Desenhar Planta: " + selected_plant.getCardType().name());
                 floatingSelectedSunFlower.setX(mousePointInfo.x - (floatingSelectedSunFlower.getWidth() / 2));
                 floatingSelectedSunFlower.setY(mousePointInfo.y - (floatingSelectedSunFlower.getHeight() / 2));
+                gameMapGrid.checkIfMouseIsOverSomeRectangle(mousePointInfo, graphics);
                 floatingSelectedSunFlower.drawItemWithBrightnessIncreased(graphics);
+                //gameMapGrid.drawRectGrid(graphics, gameMapGrid.getNumberOfRows(), gameMapGrid.getNumberOfCols());
                 break;
         }
     }
@@ -157,8 +214,8 @@ public class GamePanel extends JPanel {
         System.out.println("Gerando sois...");
 
         SunItem sunItem = new SunItem();
-        int x = (int) (Math.random() * getWidth()); // Posição X aleatória dentro da largura do painel
-        int y = 10; // Posição Y no topo do painel
+        int x = (int) (Math.random() * getWidth() - sunItem.getWidth()); // Posição X aleatória dentro da largura do painel
+        int y = -20; // Posição Y no topo do painel
 
         System.out.println("X: " + x + " - Y: " + y);
         sunItem.setPosition(x, y);
@@ -197,7 +254,12 @@ public class GamePanel extends JPanel {
 
             plantCard.setX(120 + avaliablePlants.indexOf(plantCard) * plantCard.getWidth() + 5); // Definindo posição X de cada card de acordo com seu index na lista de cards.
             plantCard.setY(10);
-            plantCard.drawItem(graphics2D);
+
+            if (qntSois >= plantCard.getCardSunPrice()) {
+                plantCard.drawItem(graphics2D);
+            } else {
+                plantCard.drawItemInGrayscaleMode(graphics2D);
+            }
         }
     }
 
@@ -216,5 +278,8 @@ public class GamePanel extends JPanel {
         }
     }
 
+    public void startSunGeneratorTimer() {
+        timer.start();
+    }
 
 }
